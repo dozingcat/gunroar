@@ -157,6 +157,9 @@ private void parseArgs(string[] commandArgs) {
     case "-noretina":
       screen.highDpi = false;
       break;
+    case "-bot":
+      GameManager.autoStartMode = InGameState.GameMode.BOT;
+      break;
     case "-res":
       if (i >= args.length - 2) {
         usage(progName);
@@ -254,5 +257,5 @@ private string[] readOptionsIniFile() {
 
 private void usage(string progName) {
   Logger.error
-    ("Usage: " ~ progName ~ " [-window] [-fullscreen] [-widescreen] [-retina|-noretina] [-res x y] [-brightness [0-100]] [-luminosity [0-100]] [-nosound] [-exchange] [-turnspeed [0-500]] [-firerear] [-rotatestick2 deg] [-reversestick2] [-enableaxis5] [-nowait]");
+    ("Usage: " ~ progName ~ " [-window] [-fullscreen] [-widescreen] [-retina|-noretina] [-bot] [-res x y] [-brightness [0-100]] [-luminosity [0-100]] [-nosound] [-exchange] [-turnspeed [0-500]] [-firerear] [-rotatestick2 deg] [-reversestick2] [-enableaxis5] [-nowait]");
 }

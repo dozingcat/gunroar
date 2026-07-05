@@ -35,6 +35,7 @@ private import abagames.gr.replay;
 private import abagames.gr.shape;
 private import abagames.gr.reel;
 private import abagames.gr.mouseandpad;
+private import abagames.gr.bot;
 
 /**
  * Manage the game state and actor pools.
@@ -43,6 +44,7 @@ public class GameManager: abagames.util.sdl.gamemanager.GameManager {
  public:
   static float shipTurnSpeed = 1;
   static bool shipReverseFire = false;
+  static int autoStartMode = -1;
  private:
   Pad pad;
   TwinStick twinStick;
@@ -147,6 +149,7 @@ public class GameManager: abagames.util.sdl.gamemanager.GameManager {
     shots = new ShotPool(50, sargs);
     ship.setShots(shots);
     ship.setEnemies(enemies);
+    ship.setBot(new Bot(field, ship, bullets, enemies));
     stageManager = new StageManager(field, enemies, ship, bullets,
                                     sparks, smokes, fragments, wakes);
     ship.setStageManager(stageManager);
@@ -182,7 +185,10 @@ public class GameManager: abagames.util.sdl.gamemanager.GameManager {
 
   public override void start() {
     loadLastReplay();
-    startTitle();
+    if (autoStartMode >= 0)
+      startInGame(autoStartMode);
+    else
+      startTitle();
   }
 
   public void startTitle(bool fromGameover = false) {
@@ -369,10 +375,10 @@ public class GameState {
 public class InGameState: GameState {
  public:
   static enum GameMode {
-    NORMAL, TWIN_STICK, DOUBLE_PLAY, MOUSE,
+    NORMAL, TWIN_STICK, DOUBLE_PLAY, MOUSE, BOT,
   };
-  static int GAME_MODE_NUM = 4;
-  static string[] gameModeText = ["NORMAL", "TWIN STICK", "DOUBLE PLAY", "MOUSE"];
+  static int GAME_MODE_NUM = 5;
+  static string[] gameModeText = ["NORMAL", "TWIN STICK", "DOUBLE PLAY", "MOUSE", "BOT"];
   bool isGameOver;
  private:
   static const float SCORE_REEL_SIZE_DEFAULT = 0.5f;
@@ -427,6 +433,7 @@ public class InGameState: GameState {
       break;
     case GameMode.TWIN_STICK:
     case GameMode.DOUBLE_PLAY:
+    case GameMode.BOT:
       RecordableTwinStick rts = cast(RecordableTwinStick) twinStick;
       rts.startRecord();
       _replayData.twinStickInputRecord = rts.inputRecord;
@@ -704,6 +711,7 @@ public class TitleState: GameState {
       break;
     case InGameState.GameMode.TWIN_STICK:
     case InGameState.GameMode.DOUBLE_PLAY:
+    case InGameState.GameMode.BOT:
       RecordableTwinStick rts = cast(RecordableTwinStick) twinStick;
       rts.startReplay(_replayData.twinStickInputRecord);
       break;

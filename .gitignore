@@ -1,0 +1,7 @@
+.DS_Store
+*.o
+sources/Gunroar
+gr.prf
+options.ini
+replay/last.rpl
+replay/error.rpl
