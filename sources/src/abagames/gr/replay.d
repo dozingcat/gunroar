@@ -54,6 +54,7 @@ public class ReplayData {
       break;
     case InGameState.GameMode.TWIN_STICK:
     case InGameState.GameMode.DOUBLE_PLAY:
+    case InGameState.GameMode.BOT:
       twinStickInputRecord.save(fd);
       break;
     case InGameState.GameMode.MOUSE:
@@ -94,6 +95,7 @@ public class ReplayData {
       break;
     case InGameState.GameMode.TWIN_STICK:
     case InGameState.GameMode.DOUBLE_PLAY:
+    case InGameState.GameMode.BOT:
       twinStickInputRecord = new InputRecord!(TwinStickState);
       twinStickInputRecord.load(fd);
       break;

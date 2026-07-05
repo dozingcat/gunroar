@@ -14,7 +14,8 @@ private import abagames.gr.gamemanager;
  */
 public class PrefManager: abagames.util.prefmanager.PrefManager {
  private:
-  static const int VERSION_NUM = 14;
+  static const int VERSION_NUM = 15;
+  static const int VERSION_NUM_14 = 14;
   static const int VERSION_NUM_13 = 13;
   static string PREF_FILE = "gr.prf";
   PrefData _prefData;
@@ -31,6 +32,8 @@ public class PrefManager: abagames.util.prefmanager.PrefManager {
       fd.rawRead(read_data);
       if (read_data[0] == VERSION_NUM_13)
         _prefData.loadVer13(fd);
+      else if (read_data[0] == VERSION_NUM_14)
+        _prefData.loadVer14(fd);
       else if (read_data[0] != VERSION_NUM)
         throw new Exception("Wrong version num");
       else
@@ -63,7 +66,7 @@ public class PrefManager: abagames.util.prefmanager.PrefManager {
 public class PrefData {
  private:
   //int[InGameState.GAME_MODE_NUM] _highScore;
-  int[4] _highScore;
+  int[5] _highScore;
   int _gameMode;
 
   public void init() {
@@ -84,6 +87,16 @@ public class PrefData {
     int[3] read_data13;
     fd.rawRead(read_data13);
     _highScore[0..3] = read_data13[];
+    int[1] read_data;
+    fd.rawRead(read_data);
+    _gameMode = read_data[0];
+  }
+
+  public void loadVer14(File fd) {
+    init();
+    int[4] read_data14;
+    fd.rawRead(read_data14);
+    _highScore[0..4] = read_data14[];
     int[1] read_data;
     fd.rawRead(read_data);
     _gameMode = read_data[0];

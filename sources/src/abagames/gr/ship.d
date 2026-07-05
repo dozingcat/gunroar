@@ -27,6 +27,7 @@ private import abagames.gr.soundmanager;
 private import abagames.gr.prefmanager;
 private import abagames.gr.shape;
 private import abagames.gr.mouseandpad;
+private import abagames.gr.bot;
 
 /**
  * Player's ship.
@@ -89,6 +90,11 @@ public class Ship {
   public void setEnemies(EnemyPool enemies) {
     foreach (Boat b; boat)
       b.setEnemies(enemies);
+  }
+
+  public void setBot(Bot bot) {
+    foreach (Boat b; boat)
+      b.setBot(bot);
   }
 
   public void setStageManager(StageManager stageManager) {
@@ -304,6 +310,7 @@ public class Boat {
   EnemyPool enemies;
   StageManager stageManager;
   InGameState gameState;
+  Bot bot;
   Vector _pos;
   Vector firePos;
   float deg;
@@ -424,6 +431,10 @@ public class Boat {
     this.gameState = gameState;
   }
 
+  public void setBot(Bot bot) {
+    this.bot = bot;
+  }
+
   public void start(int gameMode) {
     this.gameMode = gameMode;
     if (gameMode == InGameState.GameMode.DOUBLE_PLAY) {
@@ -462,6 +473,7 @@ public class Boat {
     case InGameState.GameMode.TWIN_STICK:
     case InGameState.GameMode.DOUBLE_PLAY:
     case InGameState.GameMode.MOUSE:
+    case InGameState.GameMode.BOT:
       fireCnt = 0;
       fireInterval = FIRE_INTERVAL;
       break;
@@ -495,6 +507,9 @@ public class Boat {
       break;
     case InGameState.GameMode.MOUSE:
       moveMouse();
+      break;
+    case InGameState.GameMode.BOT:
+      moveBot();
       break;
     default:
       break;
@@ -558,6 +573,9 @@ public class Boat {
       break;
     case InGameState.GameMode.MOUSE:
       fireMouse();
+      break;
+    case InGameState.GameMode.BOT:
+      fireTwinStick();
       break;
     default:
       break;
@@ -634,6 +652,34 @@ public class Boat {
   private void moveTwinStick() {
     if (!_replayMode) {
       stickInput = twinStick.getState();
+    } else {
+      try {
+        stickInput = twinStick.replay();
+      } catch (NoRecordDataException e) {
+        gameState.isGameOver = true;
+        stickInput = twinStick.getNullState();
+      }
+    }
+    if (gameState.isGameOver || cnt < -INVINCIBLE_CNT)
+      stickInput.clear();
+    vx = stickInput.left.x;
+    vy = stickInput.left.y;
+    if (vx != 0 || vy != 0) {
+      float ad = atan2(vx, vy);
+      assert(!std.math.isNaN(ad));
+      Math.normalizeDeg(ad);
+      ad -= deg;
+      Math.normalizeDeg(ad);
+      deg += ad * turnRatio * turnSpeed;
+      Math.normalizeDeg(deg);
+    }
+  }
+
+  private void moveBot() {
+    if (!_replayMode) {
+      stickInput = bot.getState();
+      // Record the bot's inputs so bot games are replayable like any other.
+      twinStick.record(stickInput);
     } else {
       try {
         stickInput = twinStick.replay();

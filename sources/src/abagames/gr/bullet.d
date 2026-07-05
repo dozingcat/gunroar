@@ -33,9 +33,9 @@ public class Bullet: Actor {
   SmokePool smokes;
   WakePool wakes;
   CrystalPool crystals;
-  Vector pos;
+  Vector _pos;
   Vector ppos;
-  float deg, speed;
+  float _deg, _speed;
   float trgDeg, trgSpeed;
   float size;
   int cnt;
@@ -45,24 +45,24 @@ public class Bullet: Actor {
   int _enemyIdx;
 
   invariant() {
-    assert(pos.x < 15 && pos.x > -15);
-    assert(pos.y < 40 && pos.y > -20);
+    assert(_pos.x < 15 && _pos.x > -15);
+    assert(_pos.y < 40 && _pos.y > -20);
     assert(ppos.x < 15 && ppos.x > -15);
     assert(ppos.y < 40 && ppos.y > -20);
-    assert(!std.math.isNaN(deg));
+    assert(!std.math.isNaN(_deg));
     assert(!std.math.isNaN(trgDeg));
-    assert(speed > -5 && speed < 10);
+    assert(_speed > -5 && _speed < 10);
     assert(trgSpeed >= 0 && trgSpeed < 10);
     assert(size > 0 && size < 10);
     assert(range > -20);
   }
 
   public this() {
-    pos = new Vector;
+    _pos = new Vector;
     ppos = new Vector;
     shape = new BulletShape;
-    deg = trgDeg = 0;
-    speed = trgSpeed = 1;
+    _deg = trgDeg = 0;
+    _speed = trgSpeed = 1;
     size = 1;
     range = 1;
   }
@@ -77,22 +77,22 @@ public class Bullet: Actor {
   }
 
   public void set(int enemyIdx,
-                  Vector p, float deg,
-                  float speed, float size, int shapeType, float range,
+                  Vector p, float d,
+                  float sp, float size, int shapeType, float range,
                   float startSpeed = 0, float startDeg = -99999,
                   bool destructive = false) {
     if (!field.checkInOuterFieldExceptTop(p))
       return;
     _enemyIdx = enemyIdx;
-    ppos.x = pos.x = p.x;
-    ppos.y = pos.y = p.y;
-    this.speed = startSpeed;
+    ppos.x = _pos.x = p.x;
+    ppos.y = _pos.y = p.y;
+    _speed = startSpeed;
     if (startDeg == -99999)
-      this.deg = deg;
+      _deg = d;
     else
-      this.deg = startDeg;
-    trgDeg = deg;
-    trgSpeed = speed;
+      _deg = startDeg;
+    trgDeg = d;
+    trgSpeed = sp;
     this.size = size;
     this.range = range;
     _destructive = destructive;
@@ -103,49 +103,49 @@ public class Bullet: Actor {
   }
 
   public override void move() {
-    ppos.x = pos.x;
-    ppos.y = pos.y;
+    ppos.x = _pos.x;
+    ppos.y = _pos.y;
     if (cnt < 30) {
-      speed += (trgSpeed - speed) * 0.066f;
-      float md = trgDeg - deg;
+      _speed += (trgSpeed - _speed) * 0.066f;
+      float md = trgDeg - _deg;
       Math.normalizeDeg(md);
-      deg += md * 0.066f;
+      _deg += md * 0.066f;
       if (cnt == 29) {
-        speed = trgSpeed;
-        deg = trgDeg;
+        _speed = trgSpeed;
+        _deg = trgDeg;
       }
     }
-    if (field.checkInOuterField(pos))
-      gameManager.addSlowdownRatio(speed * 0.24f);
-    const float degSin = sin(deg);
-    const float degCos = cos(deg);
-    float mx = degSin * speed;
-    float my = degCos * speed;
-    pos.x += mx;
-    pos.y += my;
-    pos.y -= field.lastScrollY;
-    if (ship.checkBulletHit(pos, ppos) || !field.checkInOuterFieldExceptTop(pos)) {
+    if (field.checkInOuterField(_pos))
+      gameManager.addSlowdownRatio(_speed * 0.24f);
+    const float degSin = sin(_deg);
+    const float degCos = cos(_deg);
+    float mx = degSin * _speed;
+    float my = degCos * _speed;
+    _pos.x += mx;
+    _pos.y += my;
+    _pos.y -= field.lastScrollY;
+    if (ship.checkBulletHit(_pos, ppos) || !field.checkInOuterFieldExceptTop(_pos)) {
       remove();
       return;
     }
     cnt++;
-    range -= speed;
+    range -= _speed;
     if (range <= 0)
       startDisappear();
-    if (field.getBlock(pos) >= Field.ON_BLOCK_THRESHOLD)
+    if (field.getBlock(_pos) >= Field.ON_BLOCK_THRESHOLD)
       startDisappear();
   }
 
   public void startDisappear() {
-    if (field.getBlock(pos) >= 0) {
+    if (field.getBlock(_pos) >= 0) {
       Smoke s = smokes.getInstanceForced();
-      const float degSin = sin(deg);
-      const float degCos = cos(deg);
-      s.set(pos, degSin * speed * 0.2f, degCos * speed * 0.2f, 0,
+      const float degSin = sin(_deg);
+      const float degCos = cos(_deg);
+      s.set(_pos, degSin * _speed * 0.2f, degCos * _speed * 0.2f, 0,
             Smoke.SmokeType.SAND, 30, size * 0.5f);
     } else {
       Wake w = wakes.getInstanceForced();
-      w.set(pos, deg, speed, 60, size * 3, true);
+      w.set(_pos, _deg, _speed, 60, size * 3, true);
     }
     remove();
   }
@@ -153,7 +153,7 @@ public class Bullet: Actor {
   public void changeToCrystal() {
     Crystal c = crystals.getInstance();
     if (c)
-      c.set(pos);
+      c.set(_pos);
     remove();
   }
 
@@ -162,14 +162,14 @@ public class Bullet: Actor {
   }
 
   public override void draw() {
-    if (!field.checkInOuterField(pos))
+    if (!field.checkInOuterField(_pos))
       return;
     glPushMatrix();
-    Screen.glTranslate(pos);
+    Screen.glTranslate(_pos);
     if (_destructive) {
       glRotatef(cnt * 13, 0, 0, 1);
     } else {
-      glRotatef(-deg * 180 / PI, 0, 0, 1);
+      glRotatef(-_deg * 180 / PI, 0, 0, 1);
       glRotatef(cnt * 13, 0, 1, 0);
     }
     shape.draw();
@@ -177,15 +177,15 @@ public class Bullet: Actor {
   }
 
   public void checkShotHit(Vector p, Collidable s, Shot shot) {
-    float ox = fabs(pos.x - p.x), oy = fabs(pos.y - p.y);
+    float ox = fabs(_pos.x - p.x), oy = fabs(_pos.y - p.y);
     if (ox + oy < 0.5f) {
     //if (shape.checkCollision(ox, oy, s)) {
       shot.removeHitToBullet();
       Smoke s1 = smokes.getInstance();
       if (s1) {
-        const float degSin = sin(deg);
-        const float degCos = cos(deg);
-        s1.set(pos, degSin * speed, degCos * speed, 0,
+        const float degSin = sin(_deg);
+        const float degCos = cos(_deg);
+        s1.set(_pos, degSin * _speed, degCos * _speed, 0,
                Smoke.SmokeType.SPARK, 30, size * 0.5f);
       }
       remove();
@@ -198,6 +198,18 @@ public class Bullet: Actor {
 
   public int enemyIdx() {
     return _enemyIdx;
+  }
+
+  public Vector pos() {
+    return _pos;
+  }
+
+  public float deg() {
+    return _deg;
+  }
+
+  public float speed() {
+    return _speed;
   }
 }
 
