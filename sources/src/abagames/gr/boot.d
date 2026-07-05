@@ -176,6 +176,21 @@ private void parseArgs(string[] commandArgs) {
     case "-nosound":
       SoundManager.noSound = true;
       break;
+    case "-slowdown":
+      // Intensity of the intentional slowdown under heavy fire:
+      // 100 = original behavior, 0 = always run at full speed.
+      if (i >= args.length - 1) {
+        usage(progName);
+        throw new Exception("Invalid options");
+      }
+      i++;
+      int sd = to!int(args[i]);
+      if (sd < 0 || sd > 100) {
+        usage(progName);
+        throw new Exception("Invalid options");
+      }
+      mainLoop.slowdownMaxRatio(1 + 0.75f * sd / 100);
+      break;
     case "-exchange":
       pad.buttonReversed = true;
       break;
@@ -257,5 +272,5 @@ private string[] readOptionsIniFile() {
 
 private void usage(string progName) {
   Logger.error
-    ("Usage: " ~ progName ~ " [-window] [-fullscreen] [-widescreen] [-retina|-noretina] [-bot] [-res x y] [-brightness [0-100]] [-luminosity [0-100]] [-nosound] [-exchange] [-turnspeed [0-500]] [-firerear] [-rotatestick2 deg] [-reversestick2] [-enableaxis5] [-nowait]");
+    ("Usage: " ~ progName ~ " [-window] [-fullscreen] [-widescreen] [-retina|-noretina] [-bot] [-res x y] [-slowdown [0-100]] [-brightness [0-100]] [-luminosity [0-100]] [-nosound] [-exchange] [-turnspeed [0-500]] [-firerear] [-rotatestick2 deg] [-reversestick2] [-enableaxis5] [-nowait]");
 }

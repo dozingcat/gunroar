@@ -35,6 +35,7 @@ Useful command line options:
 - `-widescreen` — 16:9 mode with a wider playfield (default is the original 4:3 game)
 - `-noretina` — render at non-Retina resolution (Retina rendering is on by default)
 - `-bot` — start directly in BOT mode, where an autonomous player steers and fires (also selectable as a game mode on the title screen)
+- `-slowdown [0-100]` — intensity of the intentional slowdown during heavy fire (100 = original behavior, 0 = always full speed)
 
 Options can also be placed in an `options.ini` file in the working directory (space-separated) to apply them on every launch.
 <hr/>
