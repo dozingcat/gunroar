@@ -15,6 +15,7 @@ private import abagames.gr.bullet;
 private import abagames.gr.ship;
 private import abagames.gr.field;
 private import abagames.gr.letter;
+private import abagames.gr.screen;
 private import abagames.gr.particle;
 private import abagames.gr.soundmanager;
 
@@ -181,9 +182,13 @@ public class StageManager {
       _blockDensity = BLOCK_DENSITY_MIN;
     else if (_blockDensity > BLOCK_DENSITY_MAX)
       _blockDensity = BLOCK_DENSITY_MAX;
-    batteryNum = cast(int) ((_blockDensity + rand.nextSignedFloat(1)) * 0.75f);
-    float tr = rank;
-    int largeShipNum = cast(int) ((2 - _blockDensity + rand.nextSignedFloat(1)) * 0.5f);
+    // Scale the spawn counts and the total enemy strength budget with the
+    // field width so enemy pressure per area is aspect-independent; each
+    // enemy keeps the strength it would have on the original 4:3 field.
+    float sizeFactor = Field.widthRatio;
+    batteryNum = cast(int) ((_blockDensity + rand.nextSignedFloat(1)) * 0.75f * sizeFactor);
+    float tr = rank * sizeFactor;
+    int largeShipNum = cast(int) ((2 - _blockDensity + rand.nextSignedFloat(1)) * 0.5f * sizeFactor);
     if (noSmallShip)
       largeShipNum = cast(int) (largeShipNum * 1.5f);
     else
@@ -206,7 +211,7 @@ public class StageManager {
       platformEnemySpec.setParam(pr / batteryNum, rand);
     }
     appType = (appType + 1) % 2;
-    int middleShipNum = cast(int) ((4 - _blockDensity + rand.nextSignedFloat(1)) * 0.66f);
+    int middleShipNum = cast(int) ((4 - _blockDensity + rand.nextSignedFloat(1)) * 0.66f * sizeFactor);
     if (noSmallShip)
       middleShipNum *= 2;
     if (middleShipNum > 0) {
@@ -225,7 +230,7 @@ public class StageManager {
     if (!noSmallShip) {
       appType = EnemyState.AppearanceType.TOP;
       int smallShipNum =
-        cast(int) (sqrt(3 + tr) * (1 + rand.nextSignedFloat(0.5f)) * 2) + 1;
+        cast(int) (sqrt(3 + tr) * (1 + rand.nextSignedFloat(0.5f)) * 2 * sizeFactor) + 1;
       if (smallShipNum > 256)
         smallShipNum = 256;
       SmallShipEnemySpec sses = new SmallShipEnemySpec(field, ship, sparks, smokes, fragments, wakes);
@@ -279,7 +284,7 @@ public class StageManager {
   }
 
   public void draw() {
-    Letter.drawNum(cast(int) (rank * 1000), 620, 10, 10, 0, 0, 33, 3);
+    Letter.drawNum(cast(int) (rank * 1000), 620 + Screen.orthoWidth - 640, 10, 10, 0, 0, 33, 3);
     Letter.drawTime(bossAppTime, 120, 20, 7);
   }
 

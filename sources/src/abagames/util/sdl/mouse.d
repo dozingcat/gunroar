@@ -88,8 +88,11 @@ version (PANDORA_OR_PYRA) {
     } else {
       int mx, my;
       int btn = SDL_GetMouseState(&mx, &my);
-      state.x = mx;
-      state.y = my;
+      // Mouse coordinates are in window units; convert to drawable pixels
+      // to match screenWidth/screenHeight on high-DPI displays.
+      float dpiScale = screen.dpiScale();
+      state.x = mx * dpiScale;
+      state.y = my * dpiScale;
       /*int mvx, mvy;
       int btn = SDL_GetRelativeMouseState(&mvx, &mvy);
       state.x += mvx * accel;

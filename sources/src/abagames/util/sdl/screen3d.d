@@ -28,6 +28,7 @@ public class Screen3D: Screen, SizableScreen {
   int _height = 480;
   int _screenWidth = 640;
   int _screenHeight = 480;
+  bool _highDpi = true;
   int _screenStartX = 0;
   int _screenStartY = 0;
   string _name = "";
@@ -49,11 +50,13 @@ version (PANDORA_OR_PYRA) {
         "Unable to initialize SDL: " ~ to!string(SDL_GetError()));
     }
     // Create an OpenGL screen.
-    uint videoFlags;
+    uint videoFlags = SDL_WINDOW_OPENGL;
+    if (_highDpi)
+      videoFlags |= SDL_WINDOW_ALLOW_HIGHDPI;
     if (_windowMode) {
-      videoFlags = SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE;
+      videoFlags |= SDL_WINDOW_RESIZABLE;
     } else {
-      videoFlags = SDL_WINDOW_OPENGL | SDL_WINDOW_FULLSCREEN_DESKTOP;
+      videoFlags |= SDL_WINDOW_FULLSCREEN_DESKTOP;
     }
     _window = SDL_CreateWindow(std.string.toStringz(_name), SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, _screenWidth, _screenHeight, videoFlags);
     if (_window == null) {
@@ -100,10 +103,13 @@ version (PANDORA_OR_PYRA) {
     glMatrixMode(GL_PROJECTION);
     glLoadIdentity();
     //gluPerspective(45.0f, cast(GLfloat) width / cast(GLfloat) height, nearPlane, farPlane);
-    glFrustum(-_nearPlane,
-              _nearPlane,
-              -_nearPlane * cast(GLfloat) _height / cast(GLfloat) _width,
-              _nearPlane * cast(GLfloat) _height / cast(GLfloat) _width,
+    // Keep the vertical extent fixed and widen horizontally with the aspect
+    // ratio (identical to the original frustum at 4:3).
+    float aspect = cast(GLfloat) _width / cast(GLfloat) _height;
+    glFrustum(-_nearPlane * 0.75f * aspect,
+              _nearPlane * 0.75f * aspect,
+              -_nearPlane * 0.75f,
+              _nearPlane * 0.75f,
               0.1f, _farPlane);
     glMatrixMode(GL_MODELVIEW);
   }
@@ -153,12 +159,28 @@ version (PANDORA_OR_PYRA) {
     return _windowMode;
   }
 
+  public int width(int v) {
+    return _width = v;
+  }
+
   public int width() {
     return _width;
   }
 
+  public int height(int v) {
+    return _height = v;
+  }
+
   public int height() {
     return _height;
+  }
+
+  public bool highDpi(bool v) {
+    return _highDpi = v;
+  }
+
+  public bool highDpi() {
+    return _highDpi;
   }
 
   public int screenWidth(int v) {
@@ -179,6 +201,17 @@ version (PANDORA_OR_PYRA) {
 
   public int screenStartX() {
     return _screenStartX;
+  }
+
+  public float dpiScale() {
+    if (_window == null)
+      return 1;
+    int ww, wh, dw, dh;
+    SDL_GetWindowSize(_window, &ww, &wh);
+    SDL_GL_GetDrawableSize(_window, &dw, &dh);
+    if (ww <= 0)
+      return 1;
+    return cast(float) dw / ww;
   }
 
   public int screenStartY() {

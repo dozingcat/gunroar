@@ -17,7 +17,11 @@ private import abagames.util.sdl.luminous;
  * Handle a luminous screen and a viewpoint.
  */
 public class Screen: Screen3D {
+ public:
+  // Visible world extent at the water plane (z = 0) with the camera at z = 13.
+  static const float VISIBLE_HEIGHT = 19.5f;
  private:
+  static float aspectRatio = 4.0f / 3.0f;
   const string CAPTION = "Gunroar";
   static Rand rand;
   static float lineWidthBase;
@@ -44,6 +48,23 @@ public class Screen: Screen3D {
     _luminosity = 0;
     screenShakeCnt = 0;
     screenShakeIntense = 0;
+  }
+
+  // Switch the logical aspect ratio to 16:9. Must be called before initSDL.
+  public void setWidescreen() {
+    aspectRatio = 16.0f / 9.0f;
+    width = 1280;
+    height = 720;
+  }
+
+  // Visible world width at the water plane for the current aspect ratio.
+  public static float visibleWidth() {
+    return VISIBLE_HEIGHT * aspectRatio;
+  }
+
+  // Width of the fixed-height (480) orthographic HUD projection.
+  public static float orthoWidth() {
+    return 480 * aspectRatio;
   }
 
   protected override void init() {
@@ -118,7 +139,7 @@ public class Screen: Screen3D {
     glMatrixMode(GL_PROJECTION);
     glPushMatrix();
     glLoadIdentity();
-    glOrtho(0, 640, 480, 0, -1, 1);
+    glOrtho(0, orthoWidth, 480, 0, -1, 1);
     glMatrixMode(GL_MODELVIEW);
     glPushMatrix();
     glLoadIdentity();
