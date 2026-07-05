@@ -19,6 +19,7 @@ private import abagames.util.sdl.twinstick;
 private import abagames.util.sdl.recordableinput;
 private import abagames.util.sdl.sound;
 private import abagames.gr.screen;
+private import abagames.gr.field;
 private import abagames.gr.gamemanager;
 private import abagames.gr.prefmanager;
 private import abagames.gr.ship;
@@ -110,6 +111,8 @@ private void parseArgs(string[] commandArgs) {
   for (int i = 1; i < commandArgs.length; i++)
     args ~= commandArgs[i];
   string progName = commandArgs[0];
+  bool widescreen = false;
+  bool resSpecified = false;
   for (int i = 0; i < args.length; i++) {
     switch (args[i]) {
     case "-brightness":
@@ -142,6 +145,18 @@ private void parseArgs(string[] commandArgs) {
     case "-window":
       screen.windowMode = true;
       break;
+    case "-fullscreen":
+      screen.windowMode = false;
+      break;
+    case "-widescreen":
+      widescreen = true;
+      break;
+    case "-retina":
+      screen.highDpi = true;
+      break;
+    case "-noretina":
+      screen.highDpi = false;
+      break;
     case "-res":
       if (i >= args.length - 2) {
         usage(progName);
@@ -153,6 +168,7 @@ private void parseArgs(string[] commandArgs) {
       int h = to!int(args[i]);
       screen.screenWidth = w;
       screen.screenHeight = h;
+      resSpecified = true;
       break;
     case "-nosound":
       SoundManager.noSound = true;
@@ -216,6 +232,14 @@ private void parseArgs(string[] commandArgs) {
       throw new Exception("Invalid options");
     }
   }
+  if (widescreen) {
+    screen.setWidescreen();
+    Field.BLOCK_SIZE_X = 26;
+    if (!resSpecified) {
+      screen.screenWidth = 1280;
+      screen.screenHeight = 720;
+    }
+  }
 }
 
 private string OPTIONS_INI_FILE = "options.ini";
@@ -230,5 +254,5 @@ private string[] readOptionsIniFile() {
 
 private void usage(string progName) {
   Logger.error
-    ("Usage: " ~ progName ~ " [-window] [-res x y] [-brightness [0-100]] [-luminosity [0-100]] [-nosound] [-exchange] [-turnspeed [0-500]] [-firerear] [-rotatestick2 deg] [-reversestick2] [-enableaxis5] [-nowait]");
+    ("Usage: " ~ progName ~ " [-window] [-fullscreen] [-widescreen] [-retina|-noretina] [-res x y] [-brightness [0-100]] [-luminosity [0-100]] [-nosound] [-exchange] [-turnspeed [0-500]] [-firerear] [-rotatestick2 deg] [-reversestick2] [-enableaxis5] [-nowait]");
 }

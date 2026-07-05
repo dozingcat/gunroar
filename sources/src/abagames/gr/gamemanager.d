@@ -137,7 +137,7 @@ public class GameManager: abagames.util.sdl.gamemanager.GameManager {
     eargs ~= sparkFragments;
     eargs ~= numIndicators;
     eargs ~= scoreReel;
-    enemies = new EnemyPool(40, eargs);
+    enemies = new EnemyPool(cast(int) (40 * Field.widthRatio), eargs);
     Object[] sargs;
     sargs ~= field;
     sargs ~= enemies;
@@ -568,7 +568,7 @@ public class InGameState: GameState {
 
   public override void drawFront() {
     ship.drawFront();
-    scoreReel.draw(11.5f + (SCORE_REEL_SIZE_DEFAULT - scoreReelSize) * 3,
+    scoreReel.draw(Screen.visibleWidth / 2 - 1.5f + (SCORE_REEL_SIZE_DEFAULT - scoreReelSize) * 3,
                    -8.2f - (SCORE_REEL_SIZE_DEFAULT - scoreReelSize) * 3,
                    scoreReelSize);
     float x = -12;
@@ -590,9 +590,9 @@ public class InGameState: GameState {
   public override void drawOrtho() {
     drawGameParams();
     if (isGameOver)
-      Letter.drawString("GAME OVER", 190, 180, 15);
+      Letter.drawString("GAME OVER", 190 + (Screen.orthoWidth - 640) / 2, 180, 15);
     if (pauseCnt > 0 && (pauseCnt % 64) < 32)
-      Letter.drawString("PAUSE", 265, 210, 12);
+      Letter.drawString("PAUSE", 265 + (Screen.orthoWidth - 640) / 2, 210, 12);
   }
 
   public override void drawLuminous() {

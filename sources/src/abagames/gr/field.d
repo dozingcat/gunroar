@@ -26,17 +26,24 @@ public struct PlatformPos {
  */
 public class Field {
  public:
-  static const int BLOCK_SIZE_X = 20;
+  // Width in blocks of the game field; set from the command line before the
+  // game starts (20 at 4:3, 26 at 16:9). Arrays are sized for the maximum.
+  static const int BLOCK_SIZE_X_DEFAULT = 20;
+  static const int BLOCK_SIZE_X_MAX = 26;
+  static int BLOCK_SIZE_X = BLOCK_SIZE_X_DEFAULT;
+
+  // Field width relative to the original 4:3 field; scales enemy density.
+  public static float widthRatio() {
+    return cast(float) BLOCK_SIZE_X / BLOCK_SIZE_X_DEFAULT;
+  }
   static const int BLOCK_SIZE_Y = 64;
   static const int ON_BLOCK_THRESHOLD = 1;
   static const int NEXT_BLOCK_AREA_SIZE = 16;
  private:
-  static const float SIDEWALL_X2 = 9.3f;
 version (PANDORA) {
   static const float SIDEWALL_X1 = 13;
   static const float SIDEWALL_Y = 10;
 } else {
-  static const float SIDEWALL_X1 = 18;
   static const float SIDEWALL_Y = 15;
 }
   static const float TIME_COLOR_INDEX = 5;
@@ -45,10 +52,9 @@ version (PANDORA) {
   Ship ship;
   Rand rand;
   Vector _size, _outerSize;
-  const int SCREEN_BLOCK_SIZE_X = 20;
   const int SCREEN_BLOCK_SIZE_Y = 24;
   const float BLOCK_WIDTH = 1;
-  int[BLOCK_SIZE_Y][BLOCK_SIZE_X] block;
+  int[BLOCK_SIZE_Y][BLOCK_SIZE_X_MAX] block;
   struct Panel {
     float x, y, z;
     int ci;
@@ -56,12 +62,12 @@ version (PANDORA) {
   };
   static const float PANEL_WIDTH = 1.8f;
   static const float PANEL_HEIGHT_BASE = 0.66f;
-  Panel[BLOCK_SIZE_Y][BLOCK_SIZE_X] panel;
+  Panel[BLOCK_SIZE_Y][BLOCK_SIZE_X_MAX] panel;
   int nextBlockY;
   float screenY, blockCreateCnt;
   float _lastScrollY;
   Vector screenPos;
-  PlatformPos[SCREEN_BLOCK_SIZE_X * NEXT_BLOCK_AREA_SIZE] platformPos;
+  PlatformPos[BLOCK_SIZE_X_MAX * NEXT_BLOCK_AREA_SIZE] platformPos;
   int platformPosNum;
   float[3][6][cast(uint)TIME_COLOR_INDEX] baseColorTime = [
     [[0.15f, 0.15f, 0.3f], [0.25f, 0.25f, 0.5f], [0.35f, 0.35f, 0.45f],
@@ -82,14 +88,14 @@ version (PANDORA) {
     assert(_lastScrollY >= 0 && _lastScrollY < 10);
     assert(screenPos.x < 15 && screenPos.x > -15);
     assert(screenPos.y < 40 && screenPos.y > -20);
-    assert(platformPosNum >= 0 && platformPosNum <= SCREEN_BLOCK_SIZE_X * NEXT_BLOCK_AREA_SIZE);
+    assert(platformPosNum >= 0 && platformPosNum <= BLOCK_SIZE_X * NEXT_BLOCK_AREA_SIZE);
     assert(time >= 0 && time < TIME_COLOR_INDEX);
   }
 
   public this() {
     rand = new Rand();
-    _size = new Vector(SCREEN_BLOCK_SIZE_X / 2 * 0.9f, SCREEN_BLOCK_SIZE_Y / 2 * 0.8f);
-    _outerSize = new Vector(SCREEN_BLOCK_SIZE_X / 2, SCREEN_BLOCK_SIZE_Y / 2);
+    _size = new Vector(BLOCK_SIZE_X / 2 * 0.9f, SCREEN_BLOCK_SIZE_Y / 2 * 0.8f);
+    _outerSize = new Vector(BLOCK_SIZE_X / 2, SCREEN_BLOCK_SIZE_Y / 2);
     screenPos = new Vector;
     foreach (ref PlatformPos pp; platformPos)
       pp.pos = new Vector;
@@ -319,7 +325,7 @@ version (PANDORA) {
   public int getBlock(float x, float y) {
     y -= screenY - cast(int) screenY;
     int bx, by;
-    bx = cast(int) ((x + BLOCK_WIDTH * SCREEN_BLOCK_SIZE_X / 2) / BLOCK_WIDTH);
+    bx = cast(int) ((x + BLOCK_WIDTH * BLOCK_SIZE_X / 2) / BLOCK_WIDTH);
     by = cast(int)screenY + cast(int) ((-y + BLOCK_WIDTH * SCREEN_BLOCK_SIZE_Y / 2) / BLOCK_WIDTH);
     if (bx < 0 || bx >= BLOCK_SIZE_X)
       return -1;
@@ -337,7 +343,7 @@ version (PANDORA) {
       by += BLOCK_SIZE_Y;
     if (by > 0)
       by -= BLOCK_SIZE_Y;
-    screenPos.x = bx * BLOCK_WIDTH - BLOCK_WIDTH * SCREEN_BLOCK_SIZE_X / 2 + BLOCK_WIDTH / 2;
+    screenPos.x = bx * BLOCK_WIDTH - BLOCK_WIDTH * BLOCK_SIZE_X / 2 + BLOCK_WIDTH / 2;
     screenPos.y = by * -BLOCK_WIDTH + BLOCK_WIDTH * SCREEN_BLOCK_SIZE_Y / 2 + oy - BLOCK_WIDTH / 2;
     return screenPos;
   }
@@ -353,19 +359,27 @@ version (PANDORA) {
   }
 
   public void drawSideWalls() {
+    // Mask the area between the edge of the playfield and the edge of the
+    // visible screen.
+version (PANDORA) {
+    float wallX1 = SIDEWALL_X1;
+} else {
+    float wallX1 = Screen.visibleWidth / 2 + 6;
+}
+    float wallX2 = _size.x + 0.3f;
     glDisable(GL_BLEND);
     Screen.setColor(0, 0, 0, 1);
     glBegin(GL_TRIANGLE_FAN);
-    glVertex3f(SIDEWALL_X1, SIDEWALL_Y, 0);
-    glVertex3f(SIDEWALL_X2, SIDEWALL_Y, 0);
-    glVertex3f(SIDEWALL_X2, -SIDEWALL_Y, 0);
-    glVertex3f(SIDEWALL_X1, -SIDEWALL_Y, 0);
+    glVertex3f(wallX1, SIDEWALL_Y, 0);
+    glVertex3f(wallX2, SIDEWALL_Y, 0);
+    glVertex3f(wallX2, -SIDEWALL_Y, 0);
+    glVertex3f(wallX1, -SIDEWALL_Y, 0);
     glEnd();
     glBegin(GL_TRIANGLE_FAN);
-    glVertex3f(-SIDEWALL_X1, SIDEWALL_Y, 0);
-    glVertex3f(-SIDEWALL_X2, SIDEWALL_Y, 0);
-    glVertex3f(-SIDEWALL_X2, -SIDEWALL_Y, 0);
-    glVertex3f(-SIDEWALL_X1, -SIDEWALL_Y, 0);
+    glVertex3f(-wallX1, SIDEWALL_Y, 0);
+    glVertex3f(-wallX2, SIDEWALL_Y, 0);
+    glVertex3f(-wallX2, -SIDEWALL_Y, 0);
+    glVertex3f(-wallX1, -SIDEWALL_Y, 0);
     glEnd();
     glEnable(GL_BLEND);
   }
@@ -392,8 +406,8 @@ version (PANDORA) {
     for (int y = -1; y < SCREEN_BLOCK_SIZE_Y + NEXT_BLOCK_AREA_SIZE; y++) {
       if (by >= BLOCK_SIZE_Y)
         by -= BLOCK_SIZE_Y;
-      sx = -BLOCK_WIDTH * SCREEN_BLOCK_SIZE_X / 2;
-      for (int bx = 0; bx < SCREEN_BLOCK_SIZE_X; bx++) {
+      sx = -BLOCK_WIDTH * BLOCK_SIZE_X / 2;
+      for (int bx = 0; bx < BLOCK_SIZE_X; bx++) {
         Panel* p = &(panel[bx][by]);
         Screen.setColor(baseColor[p.ci][0] * p.or * 0.66f,
                         baseColor[p.ci][1] * p.og * 0.66f,

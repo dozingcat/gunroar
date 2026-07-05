@@ -23,4 +23,6 @@ public interface SizableScreen {
   public int screenHeight();
   public int screenStartX();
   public int screenStartY();
+  // Ratio of drawable pixels to window coordinates (>1 on high-DPI displays).
+  public float dpiScale();
 }
