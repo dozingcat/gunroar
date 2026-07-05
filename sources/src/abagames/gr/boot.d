@@ -106,6 +106,16 @@ public int boot(string[] args) {
   return EXIT_SUCCESS;
 }
 
+// Parse an integer option value; non-numeric input prints the usage.
+private int parseIntArg(string progName, string arg) {
+  try {
+    return to!int(arg);
+  } catch (ConvException e) {
+    usage(progName);
+    throw new Exception("Invalid options");
+  }
+}
+
 private void parseArgs(string[] commandArgs) {
   string[] args = readOptionsIniFile();
   for (int i = 1; i < commandArgs.length; i++)
@@ -121,7 +131,7 @@ private void parseArgs(string[] commandArgs) {
         throw new Exception("Invalid options");
       }
       i++;
-      float b = cast(float) to!int(args[i]) / 100;
+      float b = cast(float) parseIntArg(progName, args[i]) / 100;
       if (b < 0 || b > 1) {
         usage(args[0]);
         throw new Exception("Invalid options");
@@ -135,7 +145,7 @@ private void parseArgs(string[] commandArgs) {
         throw new Exception("Invalid options");
       }
       i++;
-      float l = cast(float) to!int(args[i]) / 100;
+      float l = cast(float) parseIntArg(progName, args[i]) / 100;
       if (l < 0 || l > 1) {
         usage(progName);
         throw new Exception("Invalid options");
@@ -166,15 +176,30 @@ private void parseArgs(string[] commandArgs) {
         throw new Exception("Invalid options");
       }
       i++;
-      int w = to!int(args[i]);
+      int w = parseIntArg(progName, args[i]);
       i++;
-      int h = to!int(args[i]);
+      int h = parseIntArg(progName, args[i]);
       screen.screenWidth = w;
       screen.screenHeight = h;
       resSpecified = true;
       break;
     case "-nosound":
       SoundManager.noSound = true;
+      break;
+    case "-slowdown":
+      // Intensity of the intentional slowdown under heavy fire:
+      // 100 = original behavior, 0 = always run at full speed.
+      if (i >= args.length - 1) {
+        usage(progName);
+        throw new Exception("Invalid options");
+      }
+      i++;
+      int sd = parseIntArg(progName, args[i]);
+      if (sd < 0 || sd > 100) {
+        usage(progName);
+        throw new Exception("Invalid options");
+      }
+      mainLoop.slowdownMaxRatio(1 + 0.75f * sd / 100);
       break;
     case "-exchange":
       pad.buttonReversed = true;
@@ -191,7 +216,7 @@ private void parseArgs(string[] commandArgs) {
         throw new Exception("Invalid options");
       }
       i++;
-      float s = cast(float) to!int(args[i]) / 100;
+      float s = cast(float) parseIntArg(progName, args[i]) / 100;
       if (s < 0 || s > 5) {
         usage(progName);
         throw new Exception("Invalid options");
@@ -208,7 +233,7 @@ private void parseArgs(string[] commandArgs) {
         throw new Exception("Invalid options");
       }
       i++;
-      twinStick.rotate = cast(float) to!int(args[i]) * PI / 180.0f;
+      twinStick.rotate = cast(float) parseIntArg(progName, args[i]) * PI / 180.0f;
       break;
     case "-reversestick2":
     case "-reverserightstick":
@@ -223,7 +248,7 @@ private void parseArgs(string[] commandArgs) {
         throw new Exception("Invalid options");
       }
       i++;
-      float s = cast(float) to!int(args[i]) / 100;
+      float s = cast(float) parseIntArg(progName, args[i]) / 100;
       if (s < 0 || s > 5) {
         usage(progName);
         throw new Exception("Invalid options");
@@ -257,5 +282,5 @@ private string[] readOptionsIniFile() {
 
 private void usage(string progName) {
   Logger.error
-    ("Usage: " ~ progName ~ " [-window] [-fullscreen] [-widescreen] [-retina|-noretina] [-bot] [-res x y] [-brightness [0-100]] [-luminosity [0-100]] [-nosound] [-exchange] [-turnspeed [0-500]] [-firerear] [-rotatestick2 deg] [-reversestick2] [-enableaxis5] [-nowait]");
+    ("Usage: " ~ progName ~ " [-window] [-fullscreen] [-widescreen] [-retina|-noretina] [-bot] [-res x y] [-slowdown [0-100]] [-brightness [0-100]] [-luminosity [0-100]] [-nosound] [-exchange] [-turnspeed [0-500]] [-firerear] [-rotatestick2 deg] [-reversestick2] [-enableaxis5] [-nowait]");
 }
