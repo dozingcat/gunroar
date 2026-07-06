@@ -1,5 +1,52 @@
 import opengl;
 
+version (Android) {
+
+// gl4es does not provide GLU; implement the functions the game uses.
+
+private import std.math;
+
+private const uint GL_GENERATE_MIPMAP = 0x8191;  // GL 1.4, supported by gl4es
+
+void gluLookAt(GLdouble eyex, GLdouble eyey, GLdouble eyez,
+               GLdouble centerx, GLdouble centery, GLdouble centerz,
+               GLdouble upx, GLdouble upy, GLdouble upz) {
+  float fx = cast(float) (centerx - eyex);
+  float fy = cast(float) (centery - eyey);
+  float fz = cast(float) (centerz - eyez);
+  float fl = sqrt(fx * fx + fy * fy + fz * fz);
+  fx /= fl;
+  fy /= fl;
+  fz /= fl;
+  // side = forward x up
+  float sx = fy * cast(float) upz - fz * cast(float) upy;
+  float sy = fz * cast(float) upx - fx * cast(float) upz;
+  float sz = fx * cast(float) upy - fy * cast(float) upx;
+  float sl = sqrt(sx * sx + sy * sy + sz * sz);
+  sx /= sl;
+  sy /= sl;
+  sz /= sl;
+  // recomputed up = side x forward
+  float ux = sy * fz - sz * fy;
+  float uy = sz * fx - sx * fz;
+  float uz = sx * fy - sy * fx;
+  float[16] m = [sx, ux, -fx, 0,
+                 sy, uy, -fy, 0,
+                 sz, uz, -fz, 0,
+                 0,  0,  0,   1];
+  glMultMatrixf(m.ptr);
+  glTranslatef(cast(float) -eyex, cast(float) -eyey, cast(float) -eyez);
+}
+
+int gluBuild2DMipmaps(GLenum target, GLint components, GLint width, GLint height,
+                      GLenum format, GLenum type, void* data) {
+  glTexParameteri(target, GL_GENERATE_MIPMAP, GL_TRUE);
+  glTexImage2D(target, 0, components, width, height, 0, format, type, data);
+  return 0;
+}
+
+} else {
+
 extern(System):
 
 /*
@@ -514,3 +561,4 @@ const int GLU_END       = GLU_TESS_END;
 const int GLU_ERROR     = GLU_TESS_ERROR;
 const int GLU_EDGE_FLAG = GLU_TESS_EDGE_FLAG;
 
+}

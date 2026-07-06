@@ -9,6 +9,7 @@ private import std.math;
 private import opengl;
 private import bindbc.sdl;
 private import abagames.util.vector;
+private import abagames.util.logger;
 private import abagames.util.rand;
 private import abagames.util.sdl.gamemanager;
 private import abagames.util.sdl.texture;
@@ -245,7 +246,12 @@ public class GameManager: abagames.util.sdl.gamemanager.GameManager {
   }
 
   public override void move() {
-    if (pad.keys[SDL_SCANCODE_ESCAPE] == SDL_PRESSED) {
+    bool escNow = pad.keys[SDL_SCANCODE_ESCAPE] == SDL_PRESSED;
+version (Android) {
+    // The system back gesture acts like escape (in game: back to title).
+    escNow = escNow || pad.keys[SDL_SCANCODE_AC_BACK] == SDL_PRESSED;
+}
+    if (escNow) {
       if (!escPressed) {
         escPressed = true;
         if (state == inGameState) {
@@ -283,7 +289,99 @@ public class GameManager: abagames.util.sdl.gamemanager.GameManager {
     screen.viewOrthoFixed();
     state.drawOrtho();
     screen.viewPerspective();
+version (Android) {
+    drawTouchOverlay();
+}
   }
+
+version (Android) {
+  // Touch UI overlay (virtual sticks, pause corner), drawn in its own
+  // full-window pass so positions line up exactly with touch coordinates
+  // even when the game view is letterboxed. Coordinates: x in [0, aspect],
+  // y in [0, 1], i.e. normalized window coords with square units.
+  private void drawTouchOverlay() {
+    SDL_Window* w = SDL_GL_GetCurrentWindow();
+    if (!w)
+      return;
+    int dw, dh;
+    SDL_GL_GetDrawableSize(w, &dw, &dh);
+    if (dw <= 0 || dh <= 0)
+      return;
+    glViewport(0, 0, dw, dh);
+    float aspect = cast(float) dw / dh;
+    glMatrixMode(GL_PROJECTION);
+    glPushMatrix();
+    glLoadIdentity();
+    glOrtho(0, aspect, 1, 0, -1, 1);
+    glMatrixMode(GL_MODELVIEW);
+    glPushMatrix();
+    glLoadIdentity();
+    if (state is inGameState && !inGameState.isGameOver)
+      drawPauseIcon(aspect, inGameState.paused);
+    bool sticksLive = !(state is inGameState &&
+                        inGameState.gameMode != InGameState.GameMode.TWIN_STICK &&
+                        inGameState.gameMode != InGameState.GameMode.DOUBLE_PLAY);
+    if (sticksLive) {
+      TwinStick ts = twinStick;
+      foreach (i; 0 .. 2) {
+        float ox, oy, kx, ky;
+        if (!ts.touchOverlay(i, ox, oy, kx, ky))
+          continue;
+        float r = TwinStick.STICK_RADIUS;
+        drawTouchCircle(ox * aspect, oy, r, false, 0.22f);
+        drawTouchCircle(kx * aspect, ky, r * 0.35f, true, 0.3f);
+      }
+    }
+    glMatrixMode(GL_PROJECTION);
+    glPopMatrix();
+    glMatrixMode(GL_MODELVIEW);
+    glPopMatrix();
+    glViewport(screen.screenStartX, screen.screenStartY,
+               screen.screenWidth, screen.screenHeight);
+  }
+
+  // Pause/end-game control in the top-right corner: faint during play,
+  // bright while paused (when tapping it again ends the game).
+  private void drawPauseIcon(float aspect, bool paused) {
+    float cx = (Pad.PAUSE_ZONE_X + (1 - Pad.PAUSE_ZONE_X) * 0.5f) * aspect;
+    float cy = Pad.PAUSE_ZONE_Y * 0.5f;
+    Screen.setColorForced(0.6f, 0.9f, 1, paused ? 0.8f : 0.25f);
+    glBegin(GL_QUADS);
+    foreach (i; 0 .. 2) {
+      float x = cx - 0.014f + i * 0.02f;
+      glVertex2f(x, cy - 0.02f);
+      glVertex2f(x + 0.008f, cy - 0.02f);
+      glVertex2f(x + 0.008f, cy + 0.02f);
+      glVertex2f(x, cy + 0.02f);
+    }
+    glEnd();
+  }
+
+  // Note: the ring is drawn as separate GL_LINES segments, not GL_LINE_LOOP;
+  // line loops can leak stray closing edges into later draws through gl4es.
+  private void drawTouchCircle(float cx, float cy, float r, bool fill, float alpha) {
+    Screen.setColorForced(0.5f, 0.8f, 1, alpha);
+    if (fill) {
+      glBegin(GL_TRIANGLE_FAN);
+      for (int i = 0; i < 24; i++) {
+        float a = i * PI * 2 / 24;
+        glVertex2f(cx + sin(a) * r, cy + cos(a) * r);
+      }
+      glEnd();
+    } else {
+      Screen.lineWidth(2);
+      glBegin(GL_LINES);
+      for (int i = 0; i < 32; i++) {
+        float a1 = i * PI * 2 / 32;
+        float a2 = (i + 1) * PI * 2 / 32;
+        glVertex2f(cx + sin(a1) * r, cy + cos(a1) * r);
+        glVertex2f(cx + sin(a2) * r, cy + cos(a2) * r);
+      }
+      glEnd();
+      Screen.lineWidth(1);
+    }
+  }
+}
 }
 
 /**
@@ -379,6 +477,15 @@ public class InGameState: GameState {
   };
   static int GAME_MODE_NUM = 5;
   static string[] gameModeText = ["NORMAL", "TWIN STICK", "DOUBLE PLAY", "MOUSE", "BOT"];
+  // On touchscreen-only devices most modes are unplayable; restrict the
+  // title menu to the modes that need no keyboard/mouse/pad.
+  static bool touchOnlyModes = false;
+
+  public static bool modeSelectable(int mode) {
+    if (!touchOnlyModes)
+      return true;
+    return mode == GameMode.TWIN_STICK || mode == GameMode.BOT || mode == -1;
+  }
   bool isGameOver;
  private:
   static const float SCORE_REEL_SIZE_DEFAULT = 0.5f;
@@ -493,16 +600,31 @@ public class InGameState: GameState {
   }
 
   public override void move() {
-    if (pad.keys[SDL_SCANCODE_P] == SDL_PRESSED) {
+    bool pauseTouch = false;
+version (Android) {
+    pauseTouch = pad.touchInZone(Pad.TOUCH_ZONE_PAUSE);
+}
+    if (pad.keys[SDL_SCANCODE_P] == SDL_PRESSED || pauseTouch) {
       if (!pausePressed) {
-        if (pauseCnt <= 0 && !isGameOver)
+        if (pauseCnt <= 0 && !isGameOver) {
           pauseCnt = 1;
-        else
+        } else if (pauseTouch) {
+          // Second tap on the pause corner while paused: end the game.
           pauseCnt = 0;
+          gameManager.startTitle();
+          return;
+        } else {
+          pauseCnt = 0;
+        }
       }
       pausePressed = true;
     } else {
       pausePressed = false;
+version (Android) {
+      // While paused, a tap anywhere else resumes.
+      if (pauseCnt > 0 && pad.touchInZone(Pad.TOUCH_ZONE_A))
+        pauseCnt = 0;
+}
     }
     if (pauseCnt > 0) {
       pauseCnt++;
@@ -649,6 +771,10 @@ public class InGameState: GameState {
 
   public void resetReplay() {
     _replayData = null;
+  }
+
+  public bool paused() {
+    return pauseCnt > 0;
   }
 
   public int gameMode() {

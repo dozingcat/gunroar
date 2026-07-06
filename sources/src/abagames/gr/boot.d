@@ -38,7 +38,57 @@ GameManager gameManager;
 PrefManager prefManager;
 MainLoop mainLoop;
 
-version (Win32_release) {
+version (Android) {
+  // Boot as an Android SDL application: SDLActivity loads libmain.so and
+  // calls SDL_main with the arguments from GunroarActivity.getArguments().
+  private import core.runtime;
+  private import std.file;
+  private import bindbc.sdl;
+  private import abagames.gr.replay;
+
+  private extern (C) void initialize_gl4es();
+
+  extern (C) int SDL_main(int argc, char** argv) {
+    // gl4es is built with NO_INIT_CONSTRUCTOR: running its initialization
+    // inside dlopen (during Activity.onCreate) can hang the process, so it
+    // is deferred to here — still before any EGL context exists, which is
+    // what its hardware probing expects.
+    initialize_gl4es();
+    // We handle touch input directly; stop SDL from also synthesizing mouse
+    // events from touches (and vice versa), which double-fires menu actions.
+    SDL_SetHint("SDL_TOUCH_MOUSE_EVENTS", "0");
+    SDL_SetHint("SDL_MOUSE_TOUCH_EVENTS", "0");
+    int result = EXIT_FAILURE;
+    Runtime.initialize();
+    try {
+      setupAndroidPaths();
+      string[] args = ["gunroar"];
+      for (int i = 1; i < argc; i++)
+        args ~= to!string(argv[i]);
+      result = boot(args);
+    } catch (Throwable o) {
+      Logger.error("Exception: " ~ o.toString());
+    }
+    Runtime.terminate();
+    return result;
+  }
+
+  // Writable files (prefs, replays, options.ini) live in the app's pref
+  // directory; read-only assets (images, sounds) load from the APK through
+  // SDL_RWFromFile with their usual relative paths.
+  private void setupAndroidPaths() {
+    char* pp = SDL_GetPrefPath("abagames", "gunroar");
+    if (pp == null)
+      return;
+    string prefDir = to!string(pp);
+    PrefManager.PREF_FILE = prefDir ~ "gr.prf";
+    ReplayData.dir = prefDir ~ "replay";
+    try {
+      mkdirRecurse(ReplayData.dir);
+    } catch (Exception e) {}
+    OPTIONS_INI_FILE = prefDir ~ "options.ini";
+  }
+} else version (Win32_release) {
   // Boot as the Windows executable.
   private import std.c.windows.windows;
   private import std.string;
@@ -170,6 +220,9 @@ private void parseArgs(string[] commandArgs) {
     case "-bot":
       GameManager.autoStartMode = InGameState.GameMode.BOT;
       break;
+    case "-touchonly":
+      InGameState.touchOnlyModes = true;
+      break;
     case "-res":
       if (i >= args.length - 2) {
         usage(progName);
@@ -282,5 +335,5 @@ private string[] readOptionsIniFile() {
 
 private void usage(string progName) {
   Logger.error
-    ("Usage: " ~ progName ~ " [-window] [-fullscreen] [-widescreen] [-retina|-noretina] [-bot] [-res x y] [-slowdown [0-100]] [-brightness [0-100]] [-luminosity [0-100]] [-nosound] [-exchange] [-turnspeed [0-500]] [-firerear] [-rotatestick2 deg] [-reversestick2] [-enableaxis5] [-nowait]");
+    ("Usage: " ~ progName ~ " [-window] [-fullscreen] [-widescreen] [-retina|-noretina] [-bot] [-touchonly] [-res x y] [-slowdown [0-100]] [-brightness [0-100]] [-luminosity [0-100]] [-nosound] [-exchange] [-turnspeed [0-500]] [-firerear] [-rotatestick2 deg] [-reversestick2] [-enableaxis5] [-nowait]");
 }

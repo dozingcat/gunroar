@@ -5,3 +5,18 @@ gr.prf
 options.ini
 replay/last.rpl
 replay/error.rpl
+android/local.properties
+
+# Android build artifacts
+sources/libmain.so
+sources/*.so
+android/app/src/main/jniLibs/
+android/app/src/main/assets/
+android/local.properties
+android/.gradle/
+android/build/
+android/app/build/
+.gradle/
+
+# Android native dependencies (built locally, see android/README.md)
+android-deps/

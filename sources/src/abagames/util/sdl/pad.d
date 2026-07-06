@@ -14,6 +14,9 @@ version (PANDORA) {
 private import std.string;
 private import std.stdio;
 private import bindbc.sdl;
+version (Android) {
+  private import sdl.log;
+}
 private import abagames.util.sdl.input;
 private import abagames.util.sdl.recordableinput;
 
@@ -28,6 +31,28 @@ public class Pad: Input {
   SDL_Joystick *stick = null;
   const int JOYSTICK_AXIS = 16384;
   PadState state;
+version (Android) {
+ public:
+  // Taps act as pad input for the menus: a tap on the game-mode text
+  // (bottom left) cycles the mode, a tap anywhere else is button A. The
+  // top-right corner is a pause/end-game zone (see InGameState.move).
+  static const int TOUCH_ZONE_NONE = 0;
+  static const int TOUCH_ZONE_A = 1;
+  static const int TOUCH_ZONE_MODE = 2;
+  static const int TOUCH_ZONE_PAUSE = 3;
+  static const float PAUSE_ZONE_X = 0.90f;
+  static const float PAUSE_ZONE_Y = 0.15f;
+ private:
+  static const int TOUCH_MAX = 10;
+  static const int TOUCH_ZONE_NUM = 4;
+  long[TOUCH_MAX] touchId;
+  int[TOUCH_MAX] touchZone;
+  // A tap can begin and end inside one frame's event batch; latch each
+  // zone's finger-down for one full frame so game logic never misses it.
+  bool[TOUCH_ZONE_NUM] zonePending;
+  bool[TOUCH_ZONE_NUM] zoneLatched;
+  SDL_TouchID touchDev = 0;
+}
 
   public this() {
     state = new PadState;
@@ -53,10 +78,53 @@ public class Pad: Input {
   }
 
   public void handleEvent(SDL_Event *event) {
+version (Android) {
+    switch (event.type) {
+    case SDL_FINGERDOWN:
+      touchDev = event.tfinger.touchId;
+      foreach (i; 0 .. TOUCH_MAX) {
+        if (touchZone[i] == TOUCH_ZONE_NONE) {
+          touchId[i] = event.tfinger.fingerId;
+          if (event.tfinger.x > PAUSE_ZONE_X && event.tfinger.y < PAUSE_ZONE_Y)
+            touchZone[i] = TOUCH_ZONE_PAUSE;
+          else if (event.tfinger.x < 0.30f && event.tfinger.y > 0.75f)
+            touchZone[i] = TOUCH_ZONE_MODE;
+          else
+            touchZone[i] = TOUCH_ZONE_A;
+          zonePending[touchZone[i]] = true;
+          break;
+        }
+      }
+      break;
+    case SDL_FINGERUP:
+      foreach (i; 0 .. TOUCH_MAX) {
+        if (touchZone[i] != TOUCH_ZONE_NONE && touchId[i] == event.tfinger.fingerId)
+          touchZone[i] = TOUCH_ZONE_NONE;
+      }
+      break;
+    default:
+      break;
+    }
+}
   }
 
   public void handleEvents() {
     keys = SDL_GetKeyboardState(null);
+version (Android) {
+    zoneLatched[] = zonePending[];
+    zonePending[] = false;
+    // A finger release can be lost (e.g. the system gesture navigation
+    // steals the touch); when no fingers remain on the screen, sweep any
+    // leaked slots so a phantom press cannot pin the input forever.
+    if (touchDev != 0 && SDL_GetNumTouchFingers(touchDev) == 0) {
+      foreach (i; 0 .. TOUCH_MAX) {
+        if (touchZone[i] != TOUCH_ZONE_NONE) {
+          SDL_Log("touch slot %d leaked (zone=%d); cleared", cast(int) i, touchZone[i]);
+          touchZone[i] = TOUCH_ZONE_NONE;
+        }
+      }
+    }
+}
   }
 
   public PadState getState() {
@@ -122,8 +190,33 @@ public class Pad: Input {
       else
         state.button |= PadState.Button.A;
     }
+version (Android) {
+    foreach (i; 0 .. TOUCH_MAX) {
+      if (touchZone[i] == TOUCH_ZONE_A)
+        state.button |= PadState.Button.A;
+      else if (touchZone[i] == TOUCH_ZONE_MODE)
+        state.dir |= PadState.Dir.DOWN;
+      // TOUCH_ZONE_PAUSE feeds no pad state; see touchInZone.
+    }
+    if (zoneLatched[TOUCH_ZONE_A])
+      state.button |= PadState.Button.A;
+    if (zoneLatched[TOUCH_ZONE_MODE])
+      state.dir |= PadState.Dir.DOWN;
+}
     return state;
   }
+
+version (Android) {
+  public bool touchInZone(int zone) {
+    if (zoneLatched[zone])
+      return true;
+    foreach (i; 0 .. TOUCH_MAX) {
+      if (touchZone[i] == zone)
+        return true;
+    }
+    return false;
+  }
+}
 
   public PadState getNullState() {
     state.clear();
