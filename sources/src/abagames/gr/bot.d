@@ -61,7 +61,11 @@ public class Bot {
     float sx = sp.x, sy = sp.y;
     gatherThreats(sx, sy);
     Enemy target = selectTarget(sx, sy);
-    if (target is null ||
+    bool canHit = target !is null &&
+      lineOfFireClear(sx, sy, target.pos.x, target.pos.y, target.size * 0.5f + 1);
+    // A target it cannot actually hit does not count as engagement, so the
+    // boredom drive keeps repositioning until a firing line opens.
+    if (target is null || !canHit ||
         target.pos.dist(sx, sy) - target.size * 0.5f > ENGAGE_DIST) {
       boredom++;
       if (boredom > 600)
@@ -72,7 +76,7 @@ public class Bot {
         boredom = 0;
     }
     selectMove(sx, sy, target);
-    selectFire(sx, sy, target);
+    selectFire(sx, sy, canHit ? target : null);
 version (BOTDEBUG) {
     debugCnt++;
     if (debugCnt % 300 == 0) {
@@ -153,11 +157,18 @@ version (BOTDEBUG) {
   }
 
   // Breadth-first search over 1-unit water cells for a route toward the
-  // top of the field. Returns false if the ship's cell has no open route
-  // anywhere. The waypoint is a point a few steps along the route, so an
-  // escape from a terrain pocket that first requires backtracking (away
+  // top of the field, expanded over time: reaching a cell N steps away
+  // takes ~CELL_FRAMES*N frames, and the screen-bottom boundary rises
+  // through the water at the scroll rate, so cells that will already be
+  // below it on arrival are unusable. `delayFrames` additionally pretends
+  // the ship waits that long before starting - if a route to the top
+  // exists now but not with the delay, the escape window is closing.
+  // Returns 1 if the top is reachable, 0 if only lower water is (waypoint
+  // then leads to the highest reachable cell), -1 if there is no open
+  // start cell (waypoint unset). The waypoint is a point a few steps
+  // along the route, so an escape that first requires backtracking (away
   // from the scroll direction) is found naturally.
-  private bool findAdvanceWaypoint(float sx, float sy, ref float wx, ref float wy) {
+  private int findRouteToTop(float sx, float sy, int delayFrames, ref float wx, ref float wy) {
     int hw = cast(int) field.size.x;
     int hh = cast(int) field.size.y;
     int gw = hw * 2 + 1;
@@ -177,6 +188,10 @@ version (BOTDEBUG) {
     else if (sgy >= gh)
       sgy = gh - 1;
     bfsDist[0 .. gw * gh] = -1;
+    // Frames for the ship to cross one cell, slightly conservative.
+    static const float CELL_FRAMES = 7;
+    float scroll = field.lastScrollY;
+    float floorBase = -field.size.y + scroll * delayFrames;
     int qh = 0, qt = 0;
     // Start from the ship's cell, or an open neighbor if it overlaps land.
     for (int oy = 0; oy <= 2 && qt == 0; oy++) {
@@ -193,7 +208,7 @@ version (BOTDEBUG) {
       }
     }
     if (qt == 0)
-      return false;
+      return -1;
     static const int[4] NBX = [0, 1, 0, -1];
     static const int[4] NBY = [1, 0, -1, 0];  // prefer upward expansion
     int goal = -1;
@@ -216,12 +231,18 @@ version (BOTDEBUG) {
           continue;
         if (field.getBlock(nx - hw, ny - hh) >= 0)
           continue;
-        bfsDist[ni] = bfsDist[ci] + 1;
+        // Skip cells that the rising bottom boundary will have swallowed
+        // by the time the ship can get there.
+        int nd = bfsDist[ci] + 1;
+        if (ny - hh < floorBase + scroll * CELL_FRAMES * nd)
+          continue;
+        bfsDist[ni] = nd;
         bfsPrev[ni] = ci;
         bfsQueue[qt++] = ni;
       }
     }
     // If the top is unreachable, head for the highest reachable water.
+    int result = goal >= 0 ? 1 : 0;
     if (goal < 0)
       goal = highest;
     // Walk back so the waypoint is at most a few steps from the ship.
@@ -231,7 +252,7 @@ version (BOTDEBUG) {
       wi = bfsPrev[wi];
     wx = wi % gw - hw;
     wy = wi / gw - hh;
-    return true;
+    return result;
   }
 
   private void selectMove(float sx, float sy, Enemy target) {
@@ -247,13 +268,27 @@ version (BOTDEBUG) {
     float tgtX = 0, tgtY = field.size.y * 0.9f;
     bool escaping = false;
     float wpX, wpY;
-    if (findAdvanceWaypoint(sx, sy, wpX, wpY)) {
+    // Would a route to the top still exist if the ship dawdled for a
+    // while first? If yes, cruise normally. If it only exists right now,
+    // the scroll is closing the way out - leave immediately.
+    static const int ESCAPE_GRACE_FRAMES = 90;
+    int graceRoute = findRouteToTop(sx, sy, ESCAPE_GRACE_FRAMES, wpX, wpY);
+    if (graceRoute == 1) {
       tgtX = wpX;
       tgtY = wpY;
-      // A route that starts by backing up means the ship is in a closing
-      // terrain pocket; get out immediately, before the scroll shuts it.
+      // A route that starts by backing up means the ship is in a terrain
+      // pocket; get out before the scroll shuts it.
       if (wpY < sy - 0.5f)
         escaping = true;
+    } else {
+      // No delay to spare (or the pocket is sealed and the highest
+      // remaining water is all there is): follow the best route that
+      // exists right now, at full urgency.
+      if (findRouteToTop(sx, sy, 0, wpX, wpY) != -1) {
+        tgtX = wpX;
+        tgtY = wpY;
+        escaping = true;
+      }
     }
     // When bored, close on the target to a standoff distance instead.
     if (!escaping && bore > 0 && target !is null) {
@@ -353,9 +388,36 @@ version (BOTDEBUG) {
     }
   }
 
+  // Whether shots from (sx, sy) can reach (ex, ey) without hitting high
+  // ground, which destroys shots. The check stops short of the target by
+  // `margin` (platform turrets sit on land; their own tile is not an
+  // obstacle), and accounts for the terrain scrolling down while the shot
+  // is in flight.
+  private bool lineOfFireClear(float sx, float sy, float ex, float ey, float margin) {
+    float dx = ex - sx, dy = ey - sy;
+    float dist = sqrt(dx * dx + dy * dy);
+    float checkLen = dist - margin;
+    if (checkLen <= 0)
+      return true;
+    float scroll = field.lastScrollY;
+    int steps = cast(int) (checkLen / 0.5f) + 1;
+    foreach (i; 1 .. steps + 1) {
+      float f = (cast(float) i / steps) * (checkLen / dist);
+      float px = sx + dx * f;
+      float py = sy + dy * f;
+      float t = dist * f / SHOT_SPEED;
+      if (field.getBlock(px, py + scroll * t) >= Field.ON_BLOCK_THRESHOLD)
+        return false;
+    }
+    return true;
+  }
+
   private Enemy selectTarget(float sx, float sy) {
-    Enemy target = null;
-    float minDist = 1e30f;
+    // Prefer the nearest enemy with a clear line of fire; fall back to the
+    // nearest blocked one (still useful as a movement target - closing in
+    // usually opens a firing line).
+    Enemy clearTarget = null, anyTarget = null;
+    float minClearDist = 1e30f, minAnyDist = 1e30f;
     foreach (Enemy e; enemies.actor) {
       if (!e.exists || e.state.destroyedCnt >= 0)
         continue;
@@ -366,12 +428,17 @@ version (BOTDEBUG) {
       // Prefer clearing the path ahead over chasing enemies behind.
       if (ep.y < sy)
         d += 64;
-      if (d < minDist) {
-        minDist = d;
-        target = e;
+      if (d < minAnyDist) {
+        minAnyDist = d;
+        anyTarget = e;
+      }
+      if (d < minClearDist &&
+          lineOfFireClear(sx, sy, ep.x, ep.y, e.size * 0.5f + 1)) {
+        minClearDist = d;
+        clearTarget = e;
       }
     }
-    return target;
+    return clearTarget !is null ? clearTarget : anyTarget;
   }
 
   private void selectFire(float sx, float sy, Enemy target) {
