@@ -106,6 +106,8 @@ public class TitleManager {
     cnt = 0;
     field.start();
     btnPressedCnt = 1;
+    if (!InGameState.modeSelectable(gameMode))
+      gameMode = InGameState.GameMode.TWIN_STICK;
   }
 
   public void move() {
@@ -127,11 +129,13 @@ public class TitleManager {
       else if (input.dir & PadState.Dir.UP)
         gmc = -1;
       if (gmc != 0) {
-        gameMode += gmc;
-        if (gameMode >= InGameState.GAME_MODE_NUM)
-          gameMode = -1;
-        else if (gameMode < -1)
-          gameMode = InGameState.GAME_MODE_NUM - 1;
+        do {
+          gameMode += gmc;
+          if (gameMode >= InGameState.GAME_MODE_NUM)
+            gameMode = -1;
+          else if (gameMode < -1)
+            gameMode = InGameState.GAME_MODE_NUM - 1;
+        } while (!InGameState.modeSelectable(gameMode));
         if (gameMode == -1 && _replayData) {
           SoundManager.enableBgm();
           SoundManager.enableSe();

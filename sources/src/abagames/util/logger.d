@@ -51,6 +51,40 @@ public class Logger {
   }
 }
 
+} else version (Android) {
+
+// stdout/stderr are discarded on Android; route messages to logcat.
+private import sdl.log;
+
+public class Logger {
+
+  private static void putMessage(const char[] msg) {
+    SDL_Log("%s", std.string.toStringz(msg));
+  }
+
+  public static void info(const char[] msg, bool nline = true) {
+    putMessage(msg);
+  }
+
+  public static void info(double n, bool nline = true) {
+    putMessage(to!string(n));
+  }
+
+  public static void error(const char[] msg) {
+    putMessage("Error: " ~ msg);
+  }
+
+  public static void error(Exception e) {
+    putMessage("Error: " ~ e.toString());
+  }
+
+  public static void error(Error e) {
+    putMessage("Error: " ~ e.toString());
+    if (e.next)
+      error(cast(Error) e.next);
+  }
+}
+
 } else {
 
 public class Logger {

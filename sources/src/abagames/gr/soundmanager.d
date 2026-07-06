@@ -45,19 +45,27 @@ public class SoundManager: abagames.util.sdl.sound.SoundManager {
   }
 
   private static void loadMusics() {
-    Music[string] musics;
+version (Android) {
+    // APK assets cannot be enumerated; the music list is fixed.
+    foreach (string fileBaseName; ["gr0.ogg", "gr1.ogg", "gr2.ogg", "gr3.ogg"])
+      loadMusic(fileBaseName);
+} else {
     auto files = dirEntries(Music.dir, SpanMode.shallow);
     foreach (string fileName; files) {
       string ext = extension(fileName);
       if (ext != ".ogg" && ext != ".wav")
         continue;
-      string fileBaseName = baseName(fileName);
-      Music music = new Music();
-      music.load(fileBaseName);
-      bgm[fileBaseName] = music;
-      bgmFileName ~= fileBaseName;
-      Logger.info("Load bgm: " ~ fileBaseName);
+      loadMusic(baseName(fileName));
     }
+}
+  }
+
+  private static void loadMusic(string fileBaseName) {
+    Music music = new Music();
+    music.load(fileBaseName);
+    bgm[fileBaseName] = music;
+    bgmFileName ~= fileBaseName;
+    Logger.info("Load bgm: " ~ fileBaseName);
   }
 
   private static void loadChunks() {

@@ -17,7 +17,7 @@ public class PrefManager: abagames.util.prefmanager.PrefManager {
   static const int VERSION_NUM = 15;
   static const int VERSION_NUM_14 = 14;
   static const int VERSION_NUM_13 = 13;
-  static string PREF_FILE = "gr.prf";
+  public static string PREF_FILE = "gr.prf";
   PrefData _prefData;
 
   public this() {
@@ -72,7 +72,12 @@ public class PrefData {
   public void init() {
     foreach (ref int hs; _highScore)
       hs = 0;
+version (Android) {
+    // Twin-stick is the mode the touch controls drive.
+    _gameMode = InGameState.GameMode.TWIN_STICK;
+} else {
     _gameMode = 0;
+}
   }
 
   public void load(File fd) {

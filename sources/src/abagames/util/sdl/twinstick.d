@@ -17,6 +17,7 @@ private import std.math;
 private import bindbc.sdl;
 private import abagames.util.vector;
 private import abagames.util.sdl.input;
+private import abagames.util.sdl.pad;
 private import abagames.util.sdl.recordableinput;
 
 /**
@@ -35,6 +36,19 @@ version (PANDORA) {
 }
   const int JOYSTICK_AXIS_MAX = 32768;
   TwinStickState state;
+version (Android) {
+ public:
+  // Virtual twin-stick: each half of the screen is a floating-origin
+  // analog stick anchored where the finger first lands. Full deflection
+  // is STICK_RADIUS as a fraction of the screen height.
+  static const float STICK_RADIUS = 0.11f;
+ private:
+  bool[2] tsActive;
+  long[2] tsFinger;
+  float[2] tsOriginX, tsOriginY, tsCurX, tsCurY;
+  float aspect = 16.0f / 9.0f;
+  SDL_TouchID tsDev = 0;
+}
 
   public this() {
     state = new TwinStickState;
@@ -67,11 +81,95 @@ version (PANDORA) {
   }
 
   public void handleEvent(SDL_Event *event) {
+version (Android) {
+    switch (event.type) {
+    case SDL_FINGERDOWN:
+      tsDev = event.tfinger.touchId;
+      // The pause corner is UI, not a stick.
+      if (event.tfinger.x > Pad.PAUSE_ZONE_X && event.tfinger.y < Pad.PAUSE_ZONE_Y)
+        break;
+      int side = (event.tfinger.x < 0.5f) ? 0 : 1;
+      if (!tsActive[side]) {
+        tsActive[side] = true;
+        tsFinger[side] = event.tfinger.fingerId;
+        tsOriginX[side] = tsCurX[side] = event.tfinger.x;
+        tsOriginY[side] = tsCurY[side] = event.tfinger.y;
+      }
+      break;
+    case SDL_FINGERMOTION:
+      foreach (i; 0 .. 2) {
+        if (tsActive[i] && tsFinger[i] == event.tfinger.fingerId) {
+          tsCurX[i] = event.tfinger.x;
+          tsCurY[i] = event.tfinger.y;
+        }
+      }
+      break;
+    case SDL_FINGERUP:
+      foreach (i; 0 .. 2) {
+        if (tsActive[i] && tsFinger[i] == event.tfinger.fingerId)
+          tsActive[i] = false;
+      }
+      break;
+    default:
+      break;
+    }
+}
   }
 
   public void handleEvents() {
     keys = SDL_GetKeyboardState(null);
+version (Android) {
+    SDL_Window *w = SDL_GL_GetCurrentWindow();
+    if (w) {
+      int ww, wh;
+      SDL_GetWindowSize(w, &ww, &wh);
+      if (wh > 0)
+        aspect = cast(float) ww / wh;
+    }
+    // Sweep sticks whose release event was lost (see Pad.handleEvents).
+    if (tsDev != 0 && SDL_GetNumTouchFingers(tsDev) == 0) {
+      tsActive[0] = false;
+      tsActive[1] = false;
+    }
+}
   }
+
+version (Android) {
+  // Merge the virtual stick into the state; overrides other sources
+  // while a finger is down.
+  private void applyTouch(int i, Vector v) {
+    if (!tsActive[i])
+      return;
+    float dx = (tsCurX[i] - tsOriginX[i]) * aspect / STICK_RADIUS;
+    float dy = (tsCurY[i] - tsOriginY[i]) / STICK_RADIUS;
+    float d = sqrt(dx * dx + dy * dy);
+    if (d > 1) {
+      dx /= d;
+      dy /= d;
+    }
+    v.x = dx;
+    v.y = -dy;
+  }
+
+  // Overlay info in normalized window coordinates; the knob position is
+  // clamped to the stick radius. Returns false when the stick is idle.
+  public bool touchOverlay(int i, ref float ox, ref float oy, ref float kx, ref float ky) {
+    if (!tsActive[i])
+      return false;
+    ox = tsOriginX[i];
+    oy = tsOriginY[i];
+    float dx = (tsCurX[i] - tsOriginX[i]) * aspect;
+    float dy = tsCurY[i] - tsOriginY[i];
+    float d = sqrt(dx * dx + dy * dy);
+    if (d > STICK_RADIUS) {
+      dx *= STICK_RADIUS / d;
+      dy *= STICK_RADIUS / d;
+    }
+    kx = ox + dx / aspect;
+    ky = oy + dy;
+    return true;
+  }
+}
 
   public TwinStickState getState() {
     if (stick) {
@@ -140,6 +238,10 @@ version (PANDORA) {
       if (keys[SDL_SCANCODE_I] == SDL_PRESSED)
         state.right.y = 1;
     }
+version (Android) {
+    applyTouch(0, state.left);
+    applyTouch(1, state.right);
+}
     return state;
   }
 
