@@ -70,6 +70,23 @@ version (PANDORA_OR_PYRA) {
       throw new SDLInitFailedException(
         "Unable to initialize OpenGL context: " ~ to!string(SDL_GetError()));
     }
+    // Some GL stacks (e.g. virgl on ANGLE in a VM) leave a stale error
+    // from context setup; clear it so handleError doesn't blame the
+    // first rendered frame. Bounded in case a broken driver never clears.
+    bool errorStateCleared = false;
+    for (int i = 0; i < 16; i++) {
+      if (glGetError() == GL_NO_ERROR) {
+        errorStateCleared = true;
+        break;
+      }
+    }
+    if (!errorStateCleared) {
+      SDL_GL_DeleteContext(_context);
+      SDL_DestroyWindow(_window);
+      _window = null;
+      throw new SDLInitFailedException(
+        "OpenGL error state could not be cleared after context creation");
+    }
     SDL_GetWindowSize(_window, &_screenWidth, &_screenHeight);
     glViewport(_screenStartX, _screenStartY, _screenWidth, _screenHeight);
     glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
